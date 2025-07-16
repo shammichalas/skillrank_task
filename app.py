@@ -1,49 +1,81 @@
 from flask import Flask, request, jsonify
 from pymongo import MongoClient
-from bson.objectid import ObjectId
+from pymongo.errors import PyMongoError
+from dotenv import load_dotenv
+import os
+
+# Load environment variables from .env
+load_dotenv()
 
 app = Flask(__name__)
 
+# Connect to MongoDB Atlas using URI from .env
+MONGO_URI = os.getenv("MONGO_URI")
+client = MongoClient(MONGO_URI)
+db = client["donutdb"]
+collection = db["donuts"]
 
-client = MongoClient("mongodb+srv://skillrank:project@<your-cluster>.mongodb.net/?retryWrites=true&w=majority")
-db = client["donut_db"]
-collection = db["batters"]
-
-
-@app.route('/batter', methods=['POST'])
-def add_batter():
-    data = request.json
-    result = collection.insert_one(data)
-    return jsonify({"message": "Batter added", "id": str(result.inserted_id)}), 201
-
-
-@app.route('/batter/<id>', methods=['GET'])
-def read_batter(id):
+# 🟢 CREATE - Add a new donut
+@app.route("/donut", methods=["POST"])
+def add_donut():
     try:
-        batter = collection.find_one({"_id": ObjectId(id)})
-        if batter:
-            batter["_id"] = str(batter["_id"])
-            return jsonify(batter), 200
-        return jsonify({"error": "Not found"}), 404
-    except:
-        return jsonify({"error": "Invalid ID"}), 400
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
 
+        result = collection.insert_one(data)
+        return jsonify({"message": "Donut added", "id": str(result.inserted_id)}), 201
+    except PyMongoError as e:
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/batter/<id>', methods=['PUT'])
-def update_batter(id):
-    data = request.json
-    result = collection.update_one({"_id": ObjectId(id)}, {"$set": data})
-    if result.modified_count:
-        return jsonify({"message": "Batter updated"}), 200
-    return jsonify({"error": "Not found or no change"}), 404
+# 🔵 READ - Get all donuts
+@app.route("/donut", methods=["GET"])
+def get_all_donuts():
+    try:
+        donuts = list(collection.find({}, {"_id": 0}))
+        return jsonify(donuts), 200
+    except PyMongoError as e:
+        return jsonify({"error": str(e)}), 500
 
+# 🔍 READ - Get a donut by ID
+@app.route("/donut/<string:donut_id>", methods=["GET"])
+def get_donut(donut_id):
+    try:
+        result = collection.find_one({"id": donut_id}, {"_id": 0})
+        if not result:
+            return jsonify({"error": "Donut not found"}), 404
+        return jsonify(result), 200
+    except PyMongoError as e:
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/batter/<id>', methods=['DELETE'])
-def delete_batter(id):
-    result = collection.delete_one({"_id": ObjectId(id)})
-    if result.deleted_count:
-        return jsonify({"message": "Batter deleted"}), 200
-    return jsonify({"error": "Not found"}), 404
+# 🟡 UPDATE - Update a donut by ID
+@app.route("/donut/<string:donut_id>", methods=["PUT"])
+def update_donut(donut_id):
+    try:
+        update_data = request.get_json()
+        result = collection.update_one({"id": donut_id}, {"$set": update_data})
+        if result.matched_count == 0:
+            return jsonify({"error": "Donut not found"}), 404
+        return jsonify({"message": "Donut updated"}), 200
+    except PyMongoError as e:
+        return jsonify({"error": str(e)}), 500
 
-if __name__ == '__main__':
+# 🔴 DELETE - Delete a donut by ID
+@app.route("/donut/<string:donut_id>", methods=["DELETE"])
+def delete_donut(donut_id):
+    try:
+        result = collection.delete_one({"id": donut_id})
+        if result.deleted_count == 0:
+            return jsonify({"error": "Donut not found"}), 404
+        return jsonify({"message": "Donut deleted"}), 200
+    except PyMongoError as e:
+        return jsonify({"error": str(e)}), 500
+
+# ✅ Test route
+@app.route("/", methods=["GET"])
+def home():
+    return "Donut API is running 🍩"
+
+# Run app
+if __name__ == "__main__":
     app.run(debug=True)
