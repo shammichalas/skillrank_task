@@ -4,18 +4,18 @@ from pymongo.errors import PyMongoError
 from dotenv import load_dotenv
 import os
 
-# Load environment variables from .env
+
 load_dotenv()
 
 app = Flask(__name__)
 
-# Connect to MongoDB Atlas using URI from .env
+
 MONGO_URI = os.getenv("MONGO_URI")
 client = MongoClient(MONGO_URI)
 db = client["donutdb"]
 collection = db["donuts"]
 
-# 🟢 CREATE - Add a new donut
+
 @app.route("/donut", methods=["POST"])
 def add_donut():
     try:
@@ -28,7 +28,7 @@ def add_donut():
     except PyMongoError as e:
         return jsonify({"error": str(e)}), 500
 
-# 🔵 READ - Get all donuts
+
 @app.route("/donut", methods=["GET"])
 def get_all_donuts():
     try:
@@ -37,7 +37,7 @@ def get_all_donuts():
     except PyMongoError as e:
         return jsonify({"error": str(e)}), 500
 
-# 🔍 READ - Get a donut by ID
+
 @app.route("/donut/<string:donut_id>", methods=["GET"])
 def get_donut(donut_id):
     try:
@@ -48,7 +48,7 @@ def get_donut(donut_id):
     except PyMongoError as e:
         return jsonify({"error": str(e)}), 500
 
-# 🟡 UPDATE - Update a donut by ID
+
 @app.route("/donut/<string:donut_id>", methods=["PUT"])
 def update_donut(donut_id):
     try:
@@ -60,7 +60,7 @@ def update_donut(donut_id):
     except PyMongoError as e:
         return jsonify({"error": str(e)}), 500
 
-# 🔴 DELETE - Delete a donut by ID
+
 @app.route("/donut/<string:donut_id>", methods=["DELETE"])
 def delete_donut(donut_id):
     try:
@@ -71,11 +71,11 @@ def delete_donut(donut_id):
     except PyMongoError as e:
         return jsonify({"error": str(e)}), 500
 
-# ✅ Test route
+
 @app.route("/", methods=["GET"])
 def home():
     return "Donut API is running 🍩"
 
-# Run app
+
 if __name__ == "__main__":
     app.run(debug=True)
