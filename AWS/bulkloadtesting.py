@@ -2,11 +2,9 @@ import os
 import time
 import json
 import logging
+import jwt
 from pymongo import MongoClient, DESCENDING
-
-
-
-
+from jwt import DecodeError
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +22,21 @@ def get_db_collection():
         logging.error(f"MongoDB connection failed: {e}")
         raise
 
+def extract_username_from_token(headers):
+    try:
+        auth_header = headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return "anonymous"
+        token = auth_header.split(" ")[1]
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        return decoded.get("username") or decoded.get("cognito:username") or decoded.get("name", "unknown")
+    except DecodeError as e:
+        logging.error(f"JWT decode error: {e}")
+        return "invalid_token"
+    except Exception as e:
+        logging.error(f"Token extraction error: {e}")
+        return "unknown"
+
 def create_record(event):
     try:
         body = json.loads(event.get("body", "{}"))
@@ -31,11 +44,20 @@ def create_record(event):
         batch_size = int(body.get("batch_size", 100))
         collection = get_db_collection()
 
+        headers = event.get("headers", {}) or {}
+        inserted_by = extract_username_from_token(headers)
+
         for i in range(0, total, batch_size):
-            batch = [{"index": j, "data": f"Sample data {j}"} for j in range(i, min(i + batch_size, total))]
+            batch = [
+                {"index": j, "data": f"Sample data {j}", "inserted_by": inserted_by}
+                for j in range(i, min(i + batch_size, total))
+            ]
             collection.insert_many(batch)
 
-        return {"statusCode": 200, "body": json.dumps({"message": f"Inserted {total} records successfully"})}
+        return {
+            "statusCode": 200,
+            "body": json.dumps({"message": f"Inserted {total} records successfully by {inserted_by}"})
+        }
     except Exception as e:
         logging.error(f"Insertion failed: {e}")
         return {"statusCode": 500, "body": str(e)}
@@ -117,13 +139,13 @@ def lambda_handler(event, context):
 
         logging.info(f"Incoming request: {method} {path}")
 
-        if method == "POST" and path == "/create":
+        if method == "POST":
             return create_record(event)
-        elif method == "GET" and path == "/get":
+        elif method == "GET":
             return get_record(event)
-        elif method == "PUT" and path == "/update":
+        elif method == "PUT":
             return update_record(event)
-        elif method == "DELETE" and path == "/delete":
+        elif method == "DELETE":
             return delete_record(event)
         else:
             return {"statusCode": 404, "body": json.dumps({"error": "Invalid path or method"})}
